@@ -11,6 +11,6 @@
 - Aryansh Sharma
 - Dheeraj Bhatia
 - Dylan Hayward
-- John Deangelis <jd225@buffalo.edu>
+- John Deangelis 
 - James Kruth
 - Shawn Rice
