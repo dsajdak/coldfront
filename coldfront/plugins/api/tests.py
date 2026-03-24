@@ -31,23 +31,28 @@ class ColdfrontAPI(APITestCase):
     """Tests for the Coldfront REST API"""
 
     @classmethod
-    def setUpTestData(self):
+    def createProject(cls, user):
+        project = ProjectFactory(status=ProjectStatusChoiceFactory(name="Active"))
+        ProjectUserFactory(project=project, user=user)
+        ProjectAttributeFactory(project=project, proj_attr_type=cls.pat)
+
+        allocation = AllocationFactory(project=project)
+        allocation.resources.add(ResourceFactory(name="test"))
+        AllocationUserFactory(allocation=allocation, user=user)
+        allocation_attribute = AllocationAttributeFactory(allocation=allocation)
+        allocation_attribute.allocation_attribute_type.name
+        AllocationAttributeUsageFactory(allocation_attribute=allocation_attribute, value=1024)
+
+    @classmethod
+    def setUpTestData(cls):
         """Test Data setup for ColdFront REST API tests."""
-        self.admin_user = UserFactory(is_staff=True, is_superuser=True)
-        pat = ProjectAttributeTypeFactory(attribute_type=PAttributeTypeFactory(name="Text"))
+        cls.admin_user = UserFactory(is_staff=True, is_superuser=True)
+        cls.nonadmin_user = UserFactory(is_staff=False, is_superuser=False)
+        cls.pat = ProjectAttributeTypeFactory(attribute_type=PAttributeTypeFactory(name="Text"))
 
         for i in range(10):
-            project = ProjectFactory(status=ProjectStatusChoiceFactory(name="Active"))
-            ProjectUserFactory(project=project, user=self.admin_user)
-            ProjectAttributeFactory(project=project, proj_attr_type=pat)
-
-            allocation = AllocationFactory(project=project)
-            allocation.resources.add(ResourceFactory(name="test"))
-            AllocationUserFactory(allocation=allocation, user=self.admin_user)
-            allocation_attribute = AllocationAttributeFactory(allocation=allocation)
-            allocation_attribute.allocation_attribute_type.name
-            AllocationAttributeUsageFactory(allocation_attribute=allocation_attribute, value=1024)
-            self.pi_user = project.pi
+            cls.createProject(cls.admin_user)
+        cls.createProject(cls.nonadmin_user)
 
     def test_requires_login(self):
         """Test that the API requires authentication"""
@@ -62,7 +67,7 @@ class ColdfrontAPI(APITestCase):
         response = self.client.get("/api/allocation-requests/", format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        self.client.force_login(self.pi_user)
+        self.client.force_login(self.nonadmin_user)
         response = self.client.get("/api/allocation-requests/", format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -72,11 +77,15 @@ class ColdfrontAPI(APITestCase):
         for that user"""
         # login as admin
         self.client.force_login(self.admin_user)
+        response = self.client.get("/api/allocations/?show_all=false", format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 10)
+
         response = self.client.get("/api/allocations/", format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), Allocation.objects.all().count())
 
-        self.client.force_login(self.pi_user)
+        self.client.force_login(self.nonadmin_user)
         response = self.client.get("/api/allocations/", format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
@@ -112,11 +121,15 @@ class ColdfrontAPI(APITestCase):
         """
         # login as admin
         self.client.force_login(self.admin_user)
+        response = self.client.get("/api/projects/?show_all=false", format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 10)
+
         response = self.client.get("/api/projects/", format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), Project.objects.all().count())
 
-        self.client.force_login(self.pi_user)
+        self.client.force_login(self.nonadmin_user)
         response = self.client.get("/api/projects/", format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
@@ -146,6 +159,6 @@ class ColdfrontAPI(APITestCase):
         response = self.client.get("/api/users/", format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        self.client.force_login(self.pi_user)
+        self.client.force_login(self.nonadmin_user)
         response = self.client.get("/api/users/", format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
