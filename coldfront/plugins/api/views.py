@@ -53,6 +53,8 @@ class ResourceViewSet(viewsets.ReadOnlyModelViewSet):
 class AllocationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Query parameters:
+    - show_all (default true)
+        Show all allocations if user has the correct permissions
     - allocation_users (default false)
         Show related user data.
     - allocation_attributes (default false)
@@ -65,7 +67,11 @@ class AllocationViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         allocations = Allocation.objects.prefetch_related("project", "project__pi", "status")
 
-        if not (self.request.user.is_superuser or self.request.user.has_perm("allocation.can_view_all_allocations")):
+        if self.request.query_params.get("show_all") in ["False", "false"] or not (
+            self.request.user.is_superuser
+            or self.request.user.is_staff
+            or self.request.user.has_perm("allocation.can_view_all_allocations")
+        ):
             allocations = allocations.filter(
                 Q(project__status__name__in=["New", "Active"])
                 & (
@@ -74,6 +80,7 @@ class AllocationViewSet(viewsets.ReadOnlyModelViewSet):
                         & Q(project__projectuser__user=self.request.user)
                     )
                     | Q(project__pi=self.request.user)
+                    | (Q(allocationuser__status__name="Active") & Q(allocationuser__user=self.request.user))
                 )
             ).distinct()
 
@@ -281,6 +288,8 @@ class AllocationChangeRequestViewSet(viewsets.ReadOnlyModelViewSet):
 class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Query parameters:
+    - show_all (default true)
+        Show all projects if user has the correct permissions
     - allocations (default false)
         Show related allocation data.
     - project_users (default false)
@@ -294,7 +303,7 @@ class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         projects = Project.objects.prefetch_related("status")
 
-        if not (
+        if self.request.query_params.get("show_all") in ["False", "false"] or not (
             self.request.user.is_superuser
             or self.request.user.is_staff
             or self.request.user.has_perm("project.can_view_all_projects")
@@ -304,6 +313,7 @@ class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
                     Q(status__name__in=["New", "Active"])
                     & (
                         (Q(projectuser__role__name__contains="Manager") & Q(projectuser__user=self.request.user))
+                        | (Q(projectuser__user=self.request.user) & Q(projectuser__status__name="Active"))
                         | Q(pi=self.request.user)
                     )
                 )
