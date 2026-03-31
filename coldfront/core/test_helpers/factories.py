@@ -73,6 +73,7 @@ field_of_science_provider = DynamicProvider(provider_name="fieldofscience", elem
 
 for provider in [ColdfrontProvider, field_of_science_provider]:
     factory.Faker.add_provider(provider)
+    fake.add_provider(provider)
 
 
 ### User factories ###
@@ -144,7 +145,7 @@ class ProjectFactory(DjangoModelFactory):
         model = Project
 
     pi = SubFactory(UserFactory)
-    title = factory.Faker("project_title")
+    title = factory.Sequence(lambda _: fake.unique.project_title())
     description = factory.Faker("sentence")
     field_of_science = SubFactory(FieldOfScienceFactory)
     status = SubFactory(ProjectStatusChoiceFactory)
