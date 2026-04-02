@@ -44,8 +44,7 @@ Use this [invitation](https://join.slack.com/t/hpctoolset/shared_invite/zt-fyhvv
 
 ### Email Lists
 
-We have two mailing lists available for the ColdFront community.  To join either, please send an email to listserv@listserv.buffalo.edu with no subject, and the
-the appropriate command in the body of the message - making sure to replace first_name last_name with your actual first and last name.
+We have two mailing lists available for the ColdFront community.  To join either, please send an email to listserv@listserv.buffalo.edu with no subject, and the appropriate command in the body of the message - making sure to replace first_name last_name with your actual first and last name.
 
 To join the announcement mailing list and receive news and updates use: 
 
