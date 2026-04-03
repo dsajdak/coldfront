@@ -8,8 +8,9 @@ import logging
 import textwrap
 from typing import Any, Tuple
 
-from ldap3 import ALL_ATTRIBUTES, BASE, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, Connection, Server, Tls
+from ldap3 import BASE, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPException
+from ldap3.core.results import RESULT_NO_SUCH_ATTRIBUTE, RESULT_NO_SUCH_OBJECT, RESULT_SUCCESS
 from ldap3.utils.log import ERROR, set_library_log_detail_level
 
 from coldfront.core.utils.common import import_from_settings
@@ -165,10 +166,10 @@ def ldapsearch_get_posixgroup_memberuids(dn):
     * raises `LDAPException` if the `ldap3.Connection` cannot be established or if the `ldap3.Result` code is nonzero
     * raises `KeyError` if the `entries` attribute of the `ldap3.Connection` is empty
     """
-    conn, _ = _ldap_read_wrapper(Connection.search, dn, "(objectclass=posixGroup)", BASE, attributes=ALL_ATTRIBUTES)
-    if len(conn.entries) == 0:
+    entries, _ = _ldap_read_wrapper(Connection.search, dn, "(objectclass=posixGroup)", BASE, attributes=["memberUid"])
+    if len(entries) == 0:
         raise KeyError(dn)
-    return conn.entries
+    return entries
 
 
 def ldapsearch_get_description(dn):
@@ -177,10 +178,10 @@ def ldapsearch_get_description(dn):
     * raises `LDAPException` if the `ldap3.Connection` cannot be established or if the `ldap3.Result` code is nonzero
     * raises `KeyError` if the `entries` attribute of the `ldap3.Connection` is empty
     """
-    conn, _ = _ldap_read_wrapper(Connection.search, dn, "(objectclass=posixGroup)", BASE, attributes=["description"])
-    if len(conn.entries) == 0:
+    entries, _ = _ldap_read_wrapper(Connection.search, dn, "(objectclass=posixGroup)", BASE, attributes=["description"])
+    if len(entries) == 0:
         raise KeyError(dn)
-    return conn.entries
+    return entries
 
 
 """
@@ -282,34 +283,33 @@ def _ldap_write_wrapper(func, *args, write=True, **kwargs) -> bool:
     * returns `True` if skipped or successful, `False` if failed
     """
     logger_extra_data = dict(funcname=func.__name__, args=args, kwargs=kwargs)
-    if write:
-        logger.info("dry run, skipping...", stack_info=True, extra=logger_extra_data)
+    if not write:
+        logger.info(f"dry run, skipping... - {logger_extra_data}")
         return True
     try:
         conn = Connection(server, PROJECT_OPENLDAP_BIND_USER, PROJECT_OPENLDAP_BIND_PASSWORD, auto_bind=True)
     except LDAPException:
-        logger.exception("Failed to open LDAP connection", exc_info=True, extra=logger_extra_data)
+        logger.exception(f"Failed to open LDAP connection - {logger_extra_data}", exc_info=True)
         return False
     try:
         func(conn, *args, **kwargs)
     except Exception:
-        logger.exception("An unexpected exception occurred!", exc_info=True, extra=logger_extra_data)
+        logger.exception(f"An unexpected exception occurred! - {logger_extra_data}", exc_info=True)
         return False
     finally:
         conn.unbind()
-    if conn.result["result"] != 0:
-        logger.error("LDAP operation failed!", stack_info=True, extra=logger_extra_data)
+    if conn.result["result"] != RESULT_SUCCESS:
+        logger.error(f"LDAP operation failed! - {logger_extra_data}")
         return False
     return True
 
 
-def _ldap_read_wrapper(func, *args, **kwargs) -> Tuple[Connection, Any]:
+def _ldap_read_wrapper(func, *args, **kwargs) -> Tuple[list, Any]:
     """
     * inserts an `ldap3.Connection` as the 1st argument to `func`
         * `func` should probably be a method of `ldap3.Connection` whose 1st argument is `self`
-    * raises `LDAPException` if the ldap3.Connection cannot be established or if the ldap3.Result code is nonzero
-    * returns (ldap3.Connection, whatever `func` returns)
-        * you should probably inspect the `entries` attributes of the `ldap3.Connection`
+    * raises `LDAPException` if the ldap3.Connection cannot be established or if the ldap3.Result code is unexpected
+    * returns (ldap3.Connection.entries, whatever `func` returns)
     """
     conn = Connection(
         server,
@@ -320,8 +320,9 @@ def _ldap_read_wrapper(func, *args, **kwargs) -> Tuple[Connection, Any]:
     )
     try:
         output = func(conn, *args, **kwargs)
+        entries = conn.entries.copy()
     finally:
         conn.unbind()
-    if conn.result["result"] != 0:
+    if conn.result["result"] not in [RESULT_SUCCESS, RESULT_NO_SUCH_OBJECT, RESULT_NO_SUCH_ATTRIBUTE]:
         raise LDAPException(conn.result)
-    return conn, output
+    return entries, output
